@@ -6,7 +6,7 @@ Simple calculator implemented in Rust to learn the language a bit.
 `cargo run` in the directory
 
 ## Features
-- Basic operations
-- Decimal support
-- Variable support
+- Basic operations (`+`, `-`, `*`, `/`, `^`)
+- Decimal numbers
+- Variables
   - Including "reserved" variables (`ANS` for answer, `PI` for pi)

@@ -1,4 +1,5 @@
 use text_io::read;
+use rand::prelude::*;
 
 enum TokenType {
     Digit,
@@ -173,43 +174,53 @@ fn parse_line(input: String) -> Vec<Token> {
     tokens //return tokens
 }
 
-fn calculate(mut tokens: Vec<Token>, vars: Vec<Variable>, ans: f32) -> (f32, Vec<Variable>) {
-    //establish initial value for calculations
-    let mut value: f32 = 0.0;
+fn calculate(mut tokens: Vec<Token>, mut vars: Vec<Variable>, ans: f32) -> (f32, Vec<Variable>) {
 
     //populate tokens with variable values
     tokens = populate_var_tokens(tokens, &vars, ans);
 
+    //loop through tokens until an operator cannot be found
     while get_highest_priority_operator(&tokens) > 0 {
-        
-        /*
-        for i in 0..tokens.len() {
-            print_token(&tokens[i]);
-        }
-        */
 
         let op_i = get_highest_priority_operator(&tokens) as usize; //find highest priority value
-        //println!("i: {} t: {} priority: {}", op_i, tokens[op_i].op_val, tokens[op_i].priority);
 
         //get useful values for calculation
         let op_c = tokens[op_i].op_val;
-        let left_value: f32 = tokens[op_i - 1].f_val;
-        let right_value: f32 = tokens[op_i + 1].f_val;
-
-        //println!("{} <-> {}", left_value, right_value);
+        let left_token = &tokens[op_i - 1];
+        let right_token = &tokens[op_i + 1];
+        let left_value: f32 = left_token.f_val;
+        let right_value: f32 = right_token.f_val;
 
         //calculate combined values
         let mut combined: f32 = 0.0;
-        if op_c == '+' { combined = left_value + right_value }
-        if op_c == '-' { combined = left_value - right_value }
-        if op_c == '*' { combined = left_value * right_value }
-        if op_c == '/' { combined = left_value / right_value }
-        if op_c == '^' { combined = left_value.powf(right_value) }
+        if op_c == '+' { combined = left_value + right_value } //addition
+        if op_c == '-' { combined = left_value - right_value } //subtraction
+        if op_c == '*' { combined = left_value * right_value } //multiplication
+        if op_c == '/' { combined = left_value / right_value } //division
+        if op_c == '^' { combined = left_value.powf(right_value) } //exponent
+        if op_c == '=' {
+            match left_token.token_type {
+                TokenType::Variable => {
+                    let set_val = right_value;
+                    let var_i = get_var_index(&vars, &left_token.num_str);
 
-        //println!("combined: {} = {}", op_c, combined);
+                    if var_i > -1 { //var has index, set value
+                        vars[var_i as usize].f_val = set_val;
+                    }
+                    else { //var doesn't exist, create it
+                        vars.push(Variable {
+                            name: String::from(&left_token.num_str),
+                            f_val: set_val,
+                        })
+                    }
 
-        //replace tokens and loop
+                    combined = set_val; //set combined val so it outputs
+                }
+                _ => {}
+            }
+        }
 
+        //add simplevalue token
         tokens[op_i] = Token {
             token_type: TokenType::SimpleValue,
             num_str: combined.to_string(),
@@ -218,14 +229,15 @@ fn calculate(mut tokens: Vec<Token>, vars: Vec<Variable>, ans: f32) -> (f32, Vec
             priority: 0,
         };
 
+        //remove surrounding tokens
         tokens.remove(op_i - 1);
         tokens.remove(op_i);
 
     }
 
-    value = tokens[0].f_val;
+    let result = tokens[0].f_val; //set result to remaining simplevalue
 
-    (value, vars) //return value
+    (result, vars) //return value
 }
 
 fn populate_var_tokens(mut tokens: Vec<Token>, vars: &Vec<Variable>, ans: f32) -> Vec<Token> {
@@ -243,17 +255,17 @@ fn populate_var_tokens(mut tokens: Vec<Token>, vars: &Vec<Variable>, ans: f32) -
                 else if var_name == String::from("PI") { //PI
                     tokens[i].f_val = 3.14;
                 }
+                else if var_name == String::from("RAND") { //random float
+                    tokens[i].f_val = thread_rng().gen();
+                }
                 else { //it isn't reserved, so check against var list
-                    if var_exists(&vars, &var_name) { //variable exists
-                        //find the variable and assign token value accordingly
-                        for k in 0..vars.len() {
-                            if vars[k].name == var_name { //found one with matching name
-                                tokens[i].f_val = vars[k].f_val;
-                            }
-                        }
+                    let var_i = get_var_index(&vars, &var_name);
+
+                    if var_i > -1 { //variable exists
+                        tokens[i].f_val = vars[var_i as usize].f_val;
                     }
-                    else { //variable does not exist
-                        tokens[i].f_val = 0.0; //assign default value (0.0)
+                    else { //variable doesn't exist, placeholder of 0.0
+                        tokens[i].f_val = 0.0;
                     }
                 }
             }
@@ -264,15 +276,15 @@ fn populate_var_tokens(mut tokens: Vec<Token>, vars: &Vec<Variable>, ans: f32) -
     tokens //return tokens
 }
 
-fn var_exists(vars: &Vec<Variable>, name: &str) -> bool {
+fn get_var_index(vars: &Vec<Variable>, name: &str) -> i32 {
     //loop through vars, check if one of them has a name that matches
     for i in 0..vars.len() {
         if vars[i].name == name {
-            return true; //found one, return!
+            return i as i32; //found one, return!
         }
     }
 
-    false //none found, return false
+    -1 //none found, return false
 }
 
 fn get_highest_priority_operator(tokens: &Vec<Token>) -> i32 {
