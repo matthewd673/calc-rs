@@ -4,6 +4,7 @@ enum TokenType {
     Digit,
     Operator,
     Variable,
+    SimpleValue,
 }
 
 struct Token {
@@ -11,6 +12,7 @@ struct Token {
     num_str: String, //holds the string representation of the value
     op_val: char, //the operator value of the token (if applicable)
     f_val: f32, //the final, numeric value of the token (if applicable)
+    priority: i32, //the number of groupings deep the token occurs
 }
 
 struct Variable {
@@ -45,6 +47,7 @@ fn parse_line(input: String) -> Vec<Token> {
     let mut chars = input.chars();
     //setup tokens vec
     let mut tokens: Vec<Token> = vec![];
+    let mut open_groups = 0;
 
     'line_loop: loop {
         let c_option = chars.next(); //char result
@@ -88,6 +91,7 @@ fn parse_line(input: String) -> Vec<Token> {
                         num_str: char_str,
                         op_val: 'd', //no operator value, its a digit
                         f_val: new_f_val,
+                        priority: 0,
                     });
                 }
             }
@@ -109,12 +113,17 @@ fn parse_line(input: String) -> Vec<Token> {
                     }
                 }
             }
-            '+'|'-'|'*'|'/'|'=' => { //operator
+            '+'|'-'|'*'|'/'|'='|'^' => { //operator
+                let mut op_priority = open_groups * 2;
+                if c == '*' || c == '/' { //give slight priority to multiplication & division (pemdas!)
+                    op_priority += 1;
+                }
                 tokens.push(Token {
                     token_type: TokenType::Operator,
                     num_str: String::from("0"), //no numeric value
                     op_val: c, //get operator value from char
                     f_val: 0.0, //no f_val
+                    priority: op_priority,
                 });
             }
             'a'|'b'|'c'|'d'|'e'|'f'|'g'|'h'|'i'|'j'|'k'|'l'|'m'|'n'|'o'|'p'|'q'|'r'|'s'|'t'|'u'|'v'|'w'|'x'|'y'|'z'|
@@ -146,10 +155,13 @@ fn parse_line(input: String) -> Vec<Token> {
                         num_str: char_str,
                         op_val: 'v',
                         f_val: 0.0,
+                        priority: open_groups,
                     })
                 }
 
             }
+            '(' => { open_groups += 1; } //open group
+            ')' => { open_groups -= 1; } //close group
             '\n'|'\r'|' ' => {} //just ignore these guys
             _ => { //invalid character, warn & break
                 println!("invalid character: {}", c);
@@ -161,66 +173,57 @@ fn parse_line(input: String) -> Vec<Token> {
     tokens //return tokens
 }
 
-fn calculate(mut tokens: Vec<Token>, mut vars: Vec<Variable>, ans: f32) -> (f32, Vec<Variable>) {
+fn calculate(mut tokens: Vec<Token>, vars: Vec<Variable>, ans: f32) -> (f32, Vec<Variable>) {
     //establish initial value for calculations
     let mut value: f32 = 0.0;
 
     //populate tokens with variable values
     tokens = populate_var_tokens(tokens, &vars, ans);
 
-    //loop through all tokens
-    for i in 0..(tokens.len() - 1) {
-        match tokens[i].token_type {
-            TokenType::Digit => { //its a digit
-                if i == 0 { value = tokens[i].f_val }; //assign starting value if its the first token
-            }
-            TokenType::Operator => { //its an operator, respond accordingly
-                if tokens[i].op_val == '+' { //add next token f_val
-                    value += tokens[i + 1].f_val;
-                }
-                if tokens[i].op_val == '-' { //subtract next token f_val
-                    value -= tokens[i + 1].f_val;
-                }
-                if tokens[i].op_val == '*' { //multiply with next token f_val
-                    value *= tokens[i + 1].f_val;
-                }
-                if tokens[i].op_val == '/' { //divide by next token f_val
-                    value /= tokens[i + 1].f_val;
-                }
-                if tokens[i].op_val == '=' {
-                    if i > 0 {
-                        let var_token = &tokens[i - 1];
-                        match var_token.token_type {
-                            TokenType::Variable => {
-                                //the value to set the variable to
-                                let set_val = tokens[i + 1].f_val;
-
-                                if var_exists(&vars, &var_token.num_str) { //variable already exists!
-                                    //find variable and set the value
-                                    for k in 0..vars.len() {
-                                        if vars[k].name == var_token.num_str { //found one with matching name
-                                            vars[k].f_val = set_val; //set value accordingly
-                                        }
-                                    }
-                                }
-                                else { //new variable, create it!
-                                    vars.push(Variable {
-                                        name: String::from(&var_token.num_str),
-                                        f_val: set_val,
-                                    });
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            TokenType::Variable => { //its a variable
-                if i == 0 { value = tokens[i].f_val; }
-            }
-            _ => {}
+    while get_highest_priority_operator(&tokens) > 0 {
+        
+        /*
+        for i in 0..tokens.len() {
+            print_token(&tokens[i]);
         }
+        */
+
+        let op_i = get_highest_priority_operator(&tokens) as usize; //find highest priority value
+        //println!("i: {} t: {} priority: {}", op_i, tokens[op_i].op_val, tokens[op_i].priority);
+
+        //get useful values for calculation
+        let op_c = tokens[op_i].op_val;
+        let left_value: f32 = tokens[op_i - 1].f_val;
+        let right_value: f32 = tokens[op_i + 1].f_val;
+
+        //println!("{} <-> {}", left_value, right_value);
+
+        //calculate combined values
+        let mut combined: f32 = 0.0;
+        if op_c == '+' { combined = left_value + right_value }
+        if op_c == '-' { combined = left_value - right_value }
+        if op_c == '*' { combined = left_value * right_value }
+        if op_c == '/' { combined = left_value / right_value }
+        if op_c == '^' { combined = left_value.powf(right_value) }
+
+        //println!("combined: {} = {}", op_c, combined);
+
+        //replace tokens and loop
+
+        tokens[op_i] = Token {
+            token_type: TokenType::SimpleValue,
+            num_str: combined.to_string(),
+            op_val: 's',
+            f_val: combined,
+            priority: 0,
+        };
+
+        tokens.remove(op_i - 1);
+        tokens.remove(op_i);
+
     }
+
+    value = tokens[0].f_val;
 
     (value, vars) //return value
 }
@@ -270,6 +273,27 @@ fn var_exists(vars: &Vec<Variable>, name: &str) -> bool {
     }
 
     false //none found, return false
+}
+
+fn get_highest_priority_operator(tokens: &Vec<Token>) -> i32 {
+    
+    let mut highest_priority = -1;
+    let mut highest_priority_index: i32 = 0;
+
+    for i in 0..tokens.len() {
+        match tokens[i].token_type {
+            TokenType::Operator => {
+                if tokens[i].priority > highest_priority {
+                    highest_priority = tokens[i].priority;
+                    highest_priority_index = i as i32;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    highest_priority_index //return final index
+
 }
 
 #[allow(dead_code)]
