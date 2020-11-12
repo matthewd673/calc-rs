@@ -114,7 +114,7 @@ fn parse_line(input: String) -> Vec<Token> {
                     }
                 }
             }
-            '+'|'-'|'*'|'/'|'='|'^' => { //operator
+            '+'|'-'|'*'|'/'|'='|'^'|'>'|'<'|':' => { //operator
                 let mut op_priority = open_groups * 2;
                 if c == '*' || c == '/' { //give slight priority to multiplication & division (pemdas!)
                     op_priority += 1;
@@ -198,9 +198,9 @@ fn calculate(mut tokens: Vec<Token>, mut vars: Vec<Variable>, ans: f32) -> (f32,
         if op_c == '*' { combined = left_value * right_value } //multiplication
         if op_c == '/' { combined = left_value / right_value } //division
         if op_c == '^' { combined = left_value.powf(right_value) } //exponent
-        if op_c == '=' {
+        if op_c == ':' { //assignment
             match left_token.token_type {
-                TokenType::Variable => {
+                TokenType::Variable => { //check if left token is variable
                     let set_val = right_value;
                     let var_i = get_var_index(&vars, &left_token.num_str);
 
@@ -213,11 +213,22 @@ fn calculate(mut tokens: Vec<Token>, mut vars: Vec<Variable>, ans: f32) -> (f32,
                             f_val: set_val,
                         })
                     }
-
                     combined = set_val; //set combined val so it outputs
                 }
                 _ => {}
             }
+        }
+        if op_c == '=' { //equals
+            if left_value == right_value { combined = 1.0; }
+            else { combined = 0.0; }
+        }
+        if op_c == '>' { //greater than
+            if left_value > right_value { combined = 1.0; }
+            else { combined = 0.0; }
+        }
+        if op_c == '<' { //less than
+            if left_value < right_value { combined = 1.0; }
+            else { combined = 0.0; }
         }
 
         //add simplevalue token
@@ -248,7 +259,8 @@ fn populate_var_tokens(mut tokens: Vec<Token>, vars: &Vec<Variable>, ans: f32) -
 
                 let var_name: String = String::from(&tokens[i].num_str);
 
-                //populate based on variable name (checking reserved first)
+                //populate f_val based on variable name
+                //but first: fill value manually if its a reserved name
                 if var_name == String::from("ANS") { //ANS
                     tokens[i].f_val = ans;
                 }

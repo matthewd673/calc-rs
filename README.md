@@ -8,5 +8,7 @@ Simple calculator implemented in Rust to learn the language a bit.
 ## Features
 - Basic operations (`+`, `-`, `*`, `/`, `^`)
 - Decimal numbers
-- Variables
-  - Including "reserved" variables (`ANS` for answer, `PI` for pi)
+- Variables (assigned with `:`)
+  - Including "reserved" variables (`ANS`, `PI`, `RAND`)
+- PEMDAS (and grouping with `(` & `)`)
+- Comparators (`=`, `>`, `<`)
